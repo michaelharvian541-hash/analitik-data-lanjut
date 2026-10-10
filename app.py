@@ -106,7 +106,7 @@ for i, row in edited_df.iterrows():
     total_labor_cost_b += labor_cost
 
     end_inv = curr_inv_b + actual_prod - row["Demand"]
-    backorder = math.abs(end_inv) if end_inv < 0 else 0
+    backorder = abs(end_inv) if end_inv < 0 else 0
     excess = end_inv if end_inv > 0 else 0
 
     b_cost = backorder * backorder_cost
