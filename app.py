@@ -52,17 +52,23 @@ edited_df = st.data_editor(df_input, num_rows="dynamic", use_container_width=Tru
 # KALKULASI STRATEGI A: Chase Strategy (Vary Workforce)
 # -------------------------------------------------------------
 strat_a_list = []
-prev_workers = (
-    7  # Pekerja awal bulan Januari sesuai kapasitas kebutuhan (1200 jam / 176 jam)
-)
+prev_workers = 7
 total_hire_a = 0
 total_layoff_a = 0
 total_labor_hrs_a = 0
 
 for i, row in edited_df.iterrows():
-    req = row["Demand"] - (init_inv if i == 0 else 0)
+    demand_val = float(row["Demand"]) if pd.notnull(row["Demand"]) else 0
+    days_val = float(row["Hari_Kerja"]) if pd.notnull(row["Hari_Kerja"]) else 1
+
+    # Kebutuhan produksi tidak boleh negatif
+    if i == 0:
+        req = max(0.0, demand_val - init_inv)
+    else:
+        req = max(0.0, demand_val)
+
     hrs_needed = req * hrs_per_unit
-    hrs_per_worker = row["Hari_Kerja"] * 8
+    hrs_per_worker = max(1.0, days_val * 8)  # Hindari pembagian dengan 0
     workers_needed = math.ceil(hrs_needed / hrs_per_worker)
 
     hired = max(0, workers_needed - prev_workers)
@@ -94,18 +100,21 @@ total_cost_a = cost_hiring_a + cost_layoff_a + cost_labor_a
 # KALKULASI STRATEGI B: Level Strategy (Constant Workforce + Backorder)
 # -------------------------------------------------------------
 strat_b_list = []
-curr_inv_b = init_inv
+curr_inv_b = float(init_inv)
 total_backorder_cost_b = 0
 total_holding_cost_b = 0
 total_labor_cost_b = 0
 
 for i, row in edited_df.iterrows():
-    hrs_avail = row["Hari_Kerja"] * 8 * constant_workers
+    demand_val = float(row["Demand"]) if pd.notnull(row["Demand"]) else 0
+    days_val = float(row["Hari_Kerja"]) if pd.notnull(row["Hari_Kerja"]) else 1
+
+    hrs_avail = days_val * 8 * constant_workers
     actual_prod = hrs_avail / hrs_per_unit
     labor_cost = hrs_avail * wage_rate
     total_labor_cost_b += labor_cost
 
-    end_inv = curr_inv_b + actual_prod - row["Demand"]
+    end_inv = curr_inv_b + actual_prod - demand_val
     backorder = abs(end_inv) if end_inv < 0 else 0
     excess = end_inv if end_inv > 0 else 0
 
@@ -120,7 +129,7 @@ for i, row in edited_df.iterrows():
             "Bulan": row["Bulan"],
             "Jam Tersedia": hrs_avail,
             "Produksi": actual_prod,
-            "Demand": row["Demand"],
+            "Demand": demand_val,
             "Ending Inv": end_inv,
             "Backorder": backorder,
             "Biaya Backorder ($)": b_cost,
@@ -137,22 +146,25 @@ total_cost_b = (
 # KALKULASI STRATEGI C: Level Strategy (Constant Workforce + Subcontracting)
 # -------------------------------------------------------------
 strat_c_list = []
-curr_inv_c = init_inv
+curr_inv_c = float(init_inv)
 total_subcontract_cost_c = 0
 total_labor_cost_c = 0
 
 for i, row in edited_df.iterrows():
-    hrs_avail = row["Hari_Kerja"] * 8 * constant_workers
+    demand_val = float(row["Demand"]) if pd.notnull(row["Demand"]) else 0
+    days_val = float(row["Hari_Kerja"]) if pd.notnull(row["Hari_Kerja"]) else 1
+
+    hrs_avail = days_val * 8 * constant_workers
     actual_prod = hrs_avail / hrs_per_unit
     labor_cost = hrs_avail * wage_rate
     total_labor_cost_c += labor_cost
 
-    net_req = row["Demand"] - curr_inv_c
-    units_subcontract = max(0, net_req - actual_prod)
+    net_req = demand_val - curr_inv_c
+    units_subcontract = max(0.0, net_req - actual_prod)
     sub_cost = units_subcontract * subcontract_cost
     total_subcontract_cost_c += sub_cost
 
-    curr_inv_c = max(0, actual_prod + curr_inv_c - row["Demand"])
+    curr_inv_c = max(0.0, actual_prod + curr_inv_c - demand_val)
 
     strat_c_list.append(
         {
